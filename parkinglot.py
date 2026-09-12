@@ -10,6 +10,7 @@ from rpi_lcd import LCD
 # --- MQTT Configuration ---
 MQTT_BROKER = "b7c2435d3b9f4c30911ab76c046191a2.s1.eu.hivemq.cloud" 
 MQTT_PORT = 8883
+# البيانات الجديدة اللي أنت ضفتها
 MQTT_USERNAME = "hivemq.webclient.1789212560818"
 MQTT_PASSWORD = "R5XDOC*okP%yro3b6C5mJ3bU90$GCM4e"
 
@@ -25,12 +26,14 @@ IR_SLOT1_PIN = 4
 IR_SLOT2_PIN = 5
 SERVO_PIN = 13
 LED_RED_PIN = 10
+# الـ Pins الجديدة اللي أنت ضفتها
 LED_YELLOW_PIN = 11
 LED_GREEN_PIN = 9
 
 # --- Log File Configuration ---
 GATE_NO = "3"  
-LOG_DIR = "/home/pi/gate_logs"
+# تم استخدام expanduser عشان الكود يعمل الفولدر في مسار اليوزر بتاعك (pit1) وميجبش Error
+LOG_DIR = os.path.expanduser("~/gate_logs")
 LOG_FILE = f"{LOG_DIR}/gate_{GATE_NO}_log.csv"
 QUEUE_FILE = f"{LOG_DIR}/waiting_queue.csv"
 
@@ -69,14 +72,14 @@ mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
 mqtt_client.loop_start() 
 
 # --- Helper Functions ---
-def log_event(event_type, car_id, slot="-", duration="-", notes="-"):
+def log_event(event_type, car_id, slot="-", duration="-", cost="-", notes="-"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_exists = os.path.isfile(LOG_FILE)
     with open(LOG_FILE, mode='a', newline='') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["Timestamp", "Event Type", "Car ID", "Gate", "Slot", "Duration", "Notes"])
-        writer.writerow([timestamp, event_type, car_id, GATE_NO, slot, duration, notes])
+            writer.writerow(["Timestamp", "Event Type", "Car ID", "Gate", "Slot", "Duration", "Cost", "Notes"])
+        writer.writerow([timestamp, event_type, car_id, GATE_NO, slot, duration, cost, notes])
 
 def add_to_queue(car_id):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -178,27 +181,43 @@ try:
                 
             car_id = simulate_nfc_tap()
             
+            cost_str = "0.00"
             if car_id in active_entries:
                 entry_time = active_entries.pop(car_id)
                 duration_delta = datetime.now() - entry_time
-                minutes = int(duration_delta.total_seconds() / 60)
-                duration_str = f"{minutes // 60}h {minutes % 60}m"
+                total_seconds = duration_delta.total_seconds()
                 
-                # --- 3. MQTT Publish: Duration ---
-                duration_payload = f"Car: {car_id} | Time: {duration_str}"
+                # --- Math: 30 seconds = $2 ---
+                cost_value = (total_seconds / 30.0) * 2.0
+                cost_str = f"${cost_value:.2f}"
+                
+                minutes, seconds = divmod(int(total_seconds), 60)
+                duration_str = f"{minutes}m {seconds}s"
+                
+                # --- Terminal Printing ---
+                print("\n" + "="*35)
+                print("         EXIT RECEIPT")
+                print("="*35)
+                print(f"NFC ID       : {car_id}")
+                print(f"Time Stayed  : {duration_str} ({int(total_seconds)}s)")
+                print(f"Total Cost   : {cost_str}")
+                print("="*35 + "\n")
+                
+                # --- 3. MQTT Publish: Duration & Cost ---
+                duration_payload = f"Car: {car_id} | Time: {duration_str} | Cost: {cost_str}"
                 mqtt_client.publish(MQTT_TOPIC_DURATION, duration_payload)
-                print(f"MQTT [Duration]: {duration_payload}")
                 
             else:
                 duration_str = "Unknown"
+                print(f"\n[WARNING] Unregistered exit for NFC: {car_id}\n")
 
             if lcd:
                 lcd.clear()
-                lcd.text("Thank you", 1)
-                lcd.text(f"Time: {duration_str}", 2)
+                lcd.text("Thank you!", 1)
+                lcd.text("Have a safe trip", 2)
                 
             servo.max()  
-            log_event("EXIT", car_id, duration=duration_str, notes="Slot freed")
+            log_event("EXIT", car_id, duration=duration_str, cost=cost_str, notes="Slot freed")
             
         # --- VEHICLE COMPLETES EXIT TRANSITION (Zone B -> Zone A) ---
         elif previous_zone == "B" and current_zone == "A":
