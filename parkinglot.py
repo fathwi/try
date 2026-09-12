@@ -10,8 +10,8 @@ from rpi_lcd import LCD
 # --- MQTT Configuration ---
 MQTT_BROKER = "b7c2435d3b9f4c30911ab76c046191a2.s1.eu.hivemq.cloud" 
 MQTT_PORT = 8883
-MQTT_USERNAME = "hivemq.webclient.1788605164140"
-MQTT_PASSWORD = "h!VjRd!3n0MpC1jz!Tkq@lpItkGJKfWu"
+MQTT_USERNAME = "hivemq.webclient.1789212560818"
+MQTT_PASSWORD = "R5XDOC*okP%yro3b6C5mJ3bU90$GCM4e"
 
 # Define the 3 Topics
 MQTT_TOPIC_IR1 = "omar/ir1"
